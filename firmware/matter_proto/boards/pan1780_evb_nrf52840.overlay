@@ -1,0 +1,84 @@
+/* Hela flashen till applikationen (ingen bootloader i prototypen), 4 KB fabriksdata och 32 KB lagring. */
+/delete-node/ &boot_partition;
+/delete-node/ &slot0_partition;
+/delete-node/ &slot1_partition;
+/delete-node/ &scratch_partition;
+/delete-node/ &storage_partition;
+
+&flash0 {
+	partitions {
+		compatible = "fixed-partitions";
+		#address-cells = <1>;
+		#size-cells = <1>;
+
+		slot0_partition: partition@0 {
+			label = "image-0";
+			reg = <0x00000000 DT_SIZE_K(988)>;
+		};
+
+		factory_data_partition: partition@f7000 {
+			label = "factory-data";
+			reg = <0x000f7000 DT_SIZE_K(4)>;
+		};
+
+		storage_partition: partition@f8000 {
+			label = "storage";
+			reg = <0x000f8000 DT_SIZE_K(32)>;
+		};
+	};
+};
+
+#include <zephyr/dt-bindings/i2c/i2c.h>
+
+// OLED and retained clock RAM used by the shared UI.
+&i2c0 {
+	status = "okay";
+	clock-frequency = <I2C_BITRATE_STANDARD>;
+
+	oled: ssd1306@3c {
+		compatible = "solomon,ssd1306";
+		reg = <0x3c>;
+		width = <128>;
+		height = <32>;
+		segment-offset = <0>;
+		page-offset = <0>;
+		display-offset = <0>;
+		multiplex-ratio = <31>;
+		segment-remap;
+		com-invdir;
+		com-sequential;
+		prechargep = <0x22>;
+	};
+};
+
+&sram0 {
+	reg = <0x20000000 DT_SIZE_K(252)>;
+};
+
+/ {
+	sram@2003ffc0 {
+		compatible = "zephyr,memory-region", "mmio-sram";
+		reg = <0x2003ffc0 0x40>;
+		ranges = <0x0 0x2003ffc0 0x40>;
+		zephyr,memory-region = "RetainedMem";
+		status = "okay";
+		#address-cells = <1>;
+		#size-cells = <1>;
+
+		retainedmem0: retainedmem {
+			compatible = "zephyr,retained-ram";
+			status = "okay";
+			ranges;
+			#address-cells = <1>;
+			#size-cells = <1>;
+		};
+	};
+
+	chosen {
+		zephyr,display = &oled;
+	};
+};
+
+&rtc2 {
+	status = "okay";
+};

@@ -1,0 +1,19 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "PAN1780 UART monitor (COM3)",
+			"type": "shell",
+			"command": "powershell.exe",
+			"args": [
+				"-NoProfile",
+				"-ExecutionPolicy",
+				"Bypass",
+				"-File",
+				"${workspaceFolder}\\.vscode\\uart-monitor.ps1"
+			],
+			"isBackground": true,
+			"problemMatcher": []
+		}
+	]
+}

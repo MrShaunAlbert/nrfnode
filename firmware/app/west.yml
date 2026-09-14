@@ -1,0 +1,13 @@
+# West manifest for this freestanding NCS application.
+# Pinned to the latest stable NCS release selected for this workspace.
+manifest:
+  remotes:
+    - name: ncs
+      url-base: https://github.com/nrfconnect
+
+  projects:
+    - name: nrf
+      remote: ncs
+      repo-path: sdk-nrf
+      revision: v3.4.0
+      import: true

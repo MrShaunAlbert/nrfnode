@@ -48,8 +48,21 @@
 .tmp_versions/
 modules.order
 Module.symvers
+
+# West-managed dependency repos (populated by `west update`, pinned via firmware/app/west.yml)
+/firmware/bootloader/mcuboot/
+/firmware/modules/
+/firmware/nrf/
+/firmware/nrfxlib/
+/firmware/test/cmock/
+/firmware/tools/
+/firmware/zephyr/
+/firmware/build*/
+*.log
 Mkfile.old
 dkms.conf
 
 # debug information files
 *.dwo
+
+firmware/matter_proto/src/test_code.h

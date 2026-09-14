@@ -1,0 +1,55 @@
+#include <zephyr/dt-bindings/i2c/i2c.h>
+
+&i2c0 {
+	status = "okay";
+	clock-frequency = <I2C_BITRATE_STANDARD>;
+
+	oled: ssd1306@3c {
+		compatible = "solomon,ssd1306";
+		reg = <0x3c>;
+		width = <128>;
+		height = <32>;
+		segment-offset = <0>;
+		page-offset = <0>;
+		display-offset = <0>;
+		multiplex-ratio = <31>;
+		segment-remap;
+		com-invdir;
+		com-sequential;
+		prechargep = <0x22>;
+	};
+};
+
+&sram0 {
+	reg = <0x20000000 DT_SIZE_K(252)>;
+};
+
+/ {
+	sram@2003ffc0 {
+		compatible = "zephyr,memory-region", "mmio-sram";
+		reg = <0x2003ffc0 0x40>;
+		ranges = <0x0 0x2003ffc0 0x40>;
+		zephyr,memory-region = "RetainedMem";
+		status = "okay";
+		#address-cells = <1>;
+		#size-cells = <1>;
+
+		retainedmem0: retainedmem {
+			compatible = "zephyr,retained-ram";
+			status = "okay";
+			ranges;
+			#address-cells = <1>;
+			#size-cells = <1>;
+		};
+	};
+};
+
+&rtc2 {
+	status = "okay";
+};
+
+/ {
+	chosen {
+		zephyr,display = &oled;
+	};
+};
