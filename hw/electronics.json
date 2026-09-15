@@ -53,26 +53,81 @@
     }
   },
 
-  "imu": {
-    "type": "TDK IAM-20680HP",
+  "sensor_module": {
+    "description": "Pluggable sensor module: IMU plus 3x load-cell/temperature acquisition channels.",
     "design_comments": [
-      "IMU placeras på bas-kortet för att undvika vibrationskoppling via modulkontakten.",
-      "SPI delas med W6100 men IMU har egen CS för deterministisk timing.",
-      "IMU_INT och IMU_RST hålls lokala för att undvika latens via modulkontakten."
+      "Endast en modultyp är monterad åt gången; modulkontakten stödjer sensor_module, poe_pd_module, poe_pse_module och framtida varianter.",
+      "IMU flyttad hit från baskortet för att hålla baskortet modul-agnostiskt.",
+      "3x NAU7802 ger en dedikerad kanal per lastcell + temperaturgivare, separerade via I2C-mux."
     ],
-    "location": "base_board",
-    "interface": "SPI",
     "power": {
-      "voltage": "3.3 V",
-      "pins": ["3V3", "GND"]
+      "primary": "3V3_MOD_IN",
+      "switched": "VCC_SWITCHED_3V3",
+      "notes": "Modulen genererar ingen egen 3.3V; switched rail används vid behov av brygg-excitation eller mux/expander-styrning."
     },
-    "signals": {
-      "spi_sck": "SPI_SCK",
-      "spi_mosi": "SPI_MOSI",
-      "spi_miso": "SPI_MISO",
-      "imu_cs": "LOCAL_GPIO_1",
-      "imu_int": "LOCAL_GPIO_2",
-      "imu_rst": "LOCAL_GPIO_3"
+    "imu": {
+      "type": "TDK IAM-20680HP",
+      "design_comments": [
+        "SPI delas med baskortets master; IMU har egen CS via SPI_CS för deterministisk timing.",
+        "IMU_INT routas till INT1 för minsta möjliga latens."
+      ],
+      "interface": "SPI",
+      "signals": {
+        "spi_sck": "SPI_SCK",
+        "spi_mosi": "SPI_MOSI",
+        "spi_miso": "SPI_MISO",
+        "imu_cs": "SPI_CS",
+        "imu_int": "INT1",
+        "imu_rst": "EN_RESET"
+      }
+    },
+    "load_cell_channels": {
+      "count": 3,
+      "design_comments": [
+        "Varje kanal har en dedikerad NAU7802 med två differentialingångar: kanal 1 lastcell, kanal 2 NTC/PTC100.",
+        "Alla tre NAU7802 delar samma I2C-adress (0x2A) och separeras via I2C-mux."
+      ],
+      "adc": {
+        "part": "NAU7802",
+        "count": 3,
+        "i2c_address": "0x2A",
+        "interface": "I2C",
+        "channels_per_device": {
+          "channel_1": "load_cell (4-wire bridge)",
+          "channel_2": "NTC_or_PTC100 (bridge/divider)"
+        }
+      },
+      "i2c_mux": {
+        "part": "TCA9548A",
+        "note": "Föreslaget val, ej slutgiltigt bekräftat.",
+        "channels_used": 3,
+        "interface": "I2C",
+        "signals": { "scl": "I2C_SCL", "sda": "I2C_SDA" }
+      }
+    },
+    "gpio_expander": {
+      "part": "TBD",
+      "notes": "Extra GPIO för framtida bruk; exponeras via GPIO_GEN1/GPIO_GEN2.",
+      "interface": "I2C",
+      "signals": {
+        "scl": "I2C_SCL",
+        "sda": "I2C_SDA",
+        "gpio_out": ["GPIO_GEN1", "GPIO_GEN2"]
+      }
+    },
+    "status": {
+      "nau_drdy": "INT2_STATUS"
+    },
+    "connector_usage": {
+      "3V3_MOD_IN": "module power",
+      "VCC_SWITCHED_3V3": "optional switched power (excitation/mux/expander)",
+      "SPI_SCK_SPI_MOSI_SPI_MISO_SPI_CS": "IMU",
+      "I2C_SCL_I2C_SDA": "NAU7802 x3 (via mux) + GPIO expander",
+      "INT1": "IMU_INT",
+      "INT2_STATUS": "NAU_DRDY",
+      "EN_RESET": "IMU reset",
+      "ADC_MOD1_ADC_MOD2": "unused (reserved)",
+      "GPIO_GEN1_GPIO_GEN2": "GPIO expander outputs"
     }
   },
 
@@ -116,10 +171,10 @@
       "voltage": "12 V",
       "pins": ["VOUT", "GND_ISO"],
       "system_ground_connection": true,
-      "connect_to": "VCC_MAIN_OUT"
+      "connect_to": "VCC_MAIN (via on-module Schottky diode; not exposed on connector)"
     },
     "power_path": {
-      "vcc_main_oring": "PoE 12 V ORed with external 11–30 V",
+      "vcc_main_oring": "PoE 12 V ORed with VCC_MAIN via on-module diode, not via the connector",
       "diode_type": "Schottky or ideal diode controller",
       "direction": "Bidirectional allowed"
     }
@@ -196,43 +251,56 @@
     }
   },
 
-  "ethernet_poe_module": {
-    "description": "Modular Ethernet board with W6100, PoE-PD and optional PoE-PSE support.",
+  "poe_pd_module": {
+    "description": "PoE power-in module: W6100 Ethernet MAC/PHY + PoE-PD front-end (Ag9912-MT). Uses only the standard module connector pins defined in interface.json.",
     "design_comments": [
+      "Endast en modultyp monterad åt gången (se sensor_module.design_comments för exklusivitetsregel).",
       "W6100 bör placeras nära magnetics för att minimera differential-längd.",
-      "SPI-signaler ska ha definierad impedans och korta ledare.",
-      "POE_PRESENT kan användas för att indikera PD-status till MCU."
+      "VCC_PD genereras och ORas mot VCC_MAIN lokalt på modulen, inte via kontakten (se poe_pd.power_path)."
     ],
-    "connector": {
-      "type": "Samtec LSS-120-01-L-DV-A",
-      "pins_total": 20,
-      "pinout": {
-        "1":  { "name": "VCC_MAIN_IN",  "dir": "IN" },
-        "2":  { "name": "VCC_MAIN_OUT", "dir": "OUT", "source": "Ag9912-MT 12 V" },
-        "3":  { "name": "GND",          "dir": "PWR" },
-        "4":  { "name": "GND2",         "dir": "PWR" },
-        "5":  { "name": "NC_PWR1",      "dir": "RESERVED" },
-        "6":  { "name": "NC_PWR2",      "dir": "RESERVED" },
+    "connector_usage": {
+      "VCC_MAIN": "primary power in",
+      "3V3_MOD_IN": "logic 3.3V in",
+      "VCC_SWITCHED_3V3": "W6100 switched 3.3V",
+      "SPI_SCK_SPI_MOSI_SPI_MISO": "shared SPI bus (W6100)",
+      "SPI_CS": "W6100 chip select",
+      "INT1": "W6100_INT",
+      "INT2_STATUS": "POE_PRESENT (Ag9912-MT status)",
+      "EN_RESET": "W6100 reset",
+      "ADC_MOD1": "VCC_PD monitor",
+      "ADC_MOD2": "spare",
+      "I2C_SCL_I2C_SDA": "not used",
+      "GPIO_GEN1_GPIO_GEN2": "not used"
+    }
+  },
 
-        "7":  { "name": "3V3_IN",       "dir": "IN" },
-        "8":  { "name": "SPI_SCK",      "dir": "IN" },
-        "9":  { "name": "SPI_MOSI",     "dir": "IN" },
-        "10": { "name": "SPI_MISO",     "dir": "OUT" },
-
-        "11": { "name": "W6100_CS",     "dir": "IN" },
-        "12": { "name": "W6100_INT",    "dir": "OUT" },
-
-        "13": { "name": "POE_PRESENT",  "dir": "OUT", "source": "Ag9912-MT status" },
-
-        "14": { "name": "PSE_CS",       "dir": "IN",  "optional": true },
-        "15": { "name": "PSE_INT",      "dir": "OUT", "optional": true },
-        "16": { "name": "PSE_RST",      "dir": "IN",  "optional": true },
-
-        "17": { "name": "GPIO_UNUSED_1", "dir": "INOUT" },
-        "18": { "name": "GPIO_UNUSED_2", "dir": "INOUT" },
-        "19": { "name": "GPIO_UNUSED_3", "dir": "INOUT" },
-        "20": { "name": "GPIO_UNUSED_4", "dir": "INOUT" }
-      }
+  "poe_pse_module": {
+    "description": "PoE power-out module: W6100 Ethernet MAC/PHY + PSE controller. Uses only the standard module connector pins defined in interface.json.",
+    "design_comments": [
+      "Endast en modultyp monterad åt gången.",
+      "Ingen VCC_PD, ingen diod — modulen drivs enbart från VCC_MAIN.",
+      "Delar SPI-bus med W6100; PSE-chip har egen CS på GPIO_GEN1."
+    ],
+    "pse_chip": {
+      "part": "TBD",
+      "interface": "SPI",
+      "cs_pin": "GPIO_GEN1",
+      "enable_signal": "EN_RESET",
+      "fault_signal": "GPIO_GEN2"
+    },
+    "connector_usage": {
+      "VCC_MAIN": "sole power source (no VCC_PD, no diode)",
+      "3V3_MOD_IN": "logic 3.3V in",
+      "VCC_SWITCHED_3V3": "W6100 + PSE switched 3.3V",
+      "SPI_SCK_SPI_MOSI_SPI_MISO": "shared SPI bus (W6100 + PSE)",
+      "SPI_CS": "W6100 chip select",
+      "GPIO_GEN1": "PSE chip select",
+      "INT1": "W6100_INT",
+      "GPIO_GEN2": "PSE_FAULT",
+      "EN_RESET": "W6100 reset + PSE_EN",
+      "ADC_MOD1": "PSE VOUT monitor",
+      "ADC_MOD2": "spare",
+      "I2C_SCL_I2C_SDA": "not used"
     }
   },
 

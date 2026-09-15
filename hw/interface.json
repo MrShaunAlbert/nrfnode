@@ -76,6 +76,13 @@
       ]
     },
 
+    "module_slot_policy": {
+      "exclusivity": "Only one module is fitted at a time; the connector is shared/reused across variants.",
+      "supported_variants": ["sensor_module", "poe_pd_module", "poe_pse_module"],
+      "extensible": true,
+      "identification": "Module type identified in software before power sequencing (see safety_rules.enable_logic)."
+    },
+
     "communication": {
       "spi": {
         "master": "PAN1780",
