@@ -1,58 +1,9 @@
 {
   "baseboard": {
-    "power": {
-      "rails": {
-        "VCC_MAIN": {
-          "voltage": "11-30V",
-          "source": ["local_buck", "poe_pd_via_diode", "battery_via_tps2120"],
-          "priority": ["local_buck", "poe_pd", "battery"],
-          "description": "Primary HV rail for entire system"
-        },
-        "VCC_PD": {
-          "voltage": "12V",
-          "source": "poe_pd_module",
-          "diode_to_VCC_MAIN": true,
-          "description": "Only exists on PD module; merged locally before returning to baseboard"
-        },
-        "VCC_BAT": {
-          "voltage": "battery_voltage",
-          "description": "Backup supply for graceful shutdown"
-        },
-        "3V3_MAIN": {
-          "voltage": "3.3V",
-          "source": "local_regulator",
-          "description": "Primary 3.3V rail for logic"
-        },
-        "VCC_3V3": {
-          "voltage": "3.3V",
-          "source": "3V3_MAIN",
-          "description": "3.3V rail forwarded to module connector"
-        },
-        "VCC_SWITCHED_3V3": {
-          "voltage": "3.3V",
-          "source": "load_switch",
-          "description": "Controlled 3.3V rail for W6100/PSE logic on ETH modules"
-        }
-      },
-
-      "control_logic": {
-        "tps2120": {
-          "inputs": ["VCC_MAIN", "VCC_BAT"],
-          "output": "VCC_MAIN",
-          "priority": "VCC_MAIN_over_VCC_BAT",
-          "clear_thresholds": true,
-          "no_reset_flapping": true
-        },
-        "load_switch": {
-          "input": "3V3_MAIN",
-          "output": "VCC_SWITCHED_3V3",
-          "enable_signal": "module_identified_and_power_good"
-        }
-      }
-    },
-
     "module_connector": {
       "description": "Generalized 20-pin module interface: 2x SPI, 1x I2C, 2x analog/digital IO. Any non-power or dedikatedpin may be reconfigured as GPIO (incl. interrupt-on-pin) thanks to the PAN1780/nRF52840 signal mux flexibility.",
+      "connector_part": "Samtec LSS-120-01-L-DV-A",
+      "grounding_note": "GND_HV, GND_LV, and GND_LV_SHIELD are just pin names for current distribution across multiple pins; all are electrically common (same ground net) on the baseboard — there is no isolation between them.",
       "pins": [
         { "pin": 1, "signal": "VCC_MAIN", "direction": "out_to_module" },
         { "pin": 2, "signal": "RESERVED_POWER", "direction": "nc", "notes": "Spare HV-adjacent pin, reserved for future power use only" },
@@ -131,10 +82,7 @@
         ],
         "signals_protected": ["EN_RESET", "VCC_SWITCHED_3V3"]
       },
-      "power_priority": {
-        "order": ["VCC_MAIN", "VCC_PD", "VCC_BAT"],
-        "description": "Clear priority to avoid reset flapping"
-      },
+      "power_priority_note": "Internal 3.3V-rail arbitration (TPS2120: mains-derived vs battery-derived) and VCC_MAIN's own local_buck/poe_pd priority are baseboard implementation details, see hw/baseboard.json power_mux.",
       "module_power_policy": {
         "modules_may_generate_own_3v3": true,
         "must_be_controlled_by": ["VCC_SWITCHED_3V3", "EN_RESET"]

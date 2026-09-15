@@ -1,10 +1,32 @@
 {
+  "current_budget": {
+    "date": "2026-09-15",
+    "status": "Best guess only — not verified against real datasheets/parts for several items, see per-row notes",
+    "scenario": "Worst-case simultaneous load while running from battery: BLE TX + one active load-cell channel + display refresh overlapping",
+    "loads_ma": {
+      "pan1780_ble_tx_peak": { "value": 5, "basis": "nRF52840 datasheet, ~0dBm TX/RX" },
+      "imu_iam20680hp_active": { "value": 3.4, "basis": "6-axis active mode, datasheet typ" },
+      "nau7802_x3_active_no_excitation": { "value": 0.6, "basis": "~0.2 mA each, datasheet typ" },
+      "load_cell_excitation_1ch_active": { "value": 9, "basis": "ASSUMED 350 ohm bridge @ 3.3V; no load cell part chosen yet, unconfirmed" },
+      "rs485_transceiver_active": { "value": 5, "basis": "ASSUMED; no specific transceiver part chosen yet, unconfirmed" },
+      "display_refresh": { "value": 25, "basis": "ASSUMED typical e-paper driver current; not confirmed against this panel's datasheet" }
+    },
+    "total_worst_case_ma": 48,
+    "target_ma_at_1_0V": 90,
+    "available_ma_at_1_8V": 220,
+    "available_ma_at_1_0V": "~225-275 mA with TPS61200 (verified 2026-09-15 against datasheet's documented 1500mA average input current limit, see battery_interface.electrical.output_current_verification) — comfortable ~2.5-3x margin over the 90 mA goal.",
+    "conclusion": "~48 mA worst-case load total is comfortably below the 90 mA goal, and the TPS61200 boost converter now has verified margin (~225-275 mA available at 1.0V) to deliver it.",
+    "open_items": ["RS485 transceiver part not chosen", "load cell part/bridge resistance not chosen", "display refresh current not datasheet-confirmed", "boost converter part may need to change to reliably hit 90 mA @ 1.0V with margin"]
+  },
+
   "battery_interface": {
     "type": "2xAA rear-mounted PCB contacts",
     "design_comments": [
-      "Batteriet kan ensamt driva baseboard och enklare moduler så som sensormoduler, men är endast backup och ska aldrig belastas när VCC_MAIN finns.",
+      "Batteriet kan ensamt driva baseboard (inkl. display) och sensormodulen, men är endast backup och ska aldrig belastas när VCC_MAIN finns.",
       "PCB-kontakter minimerar mekanik och ger låg profil.",
-      "Keepout-zoner behövs för att undvika mekanisk nötning mot koppar."
+      "Keepout-zoner behövs för att undvika mekanisk nötning mot koppar.",
+      "RS485 ska kunna drivas även på enbart batteri (ingår i baseboard_own_max_current-budgeten, inte mains-only).",
+      "MÅL: 90 mA vid 1.0 V (se current_budget.target_ma_at_1_0V). Uppnås med TPS61200 (se electrical.reverse_polarity.booster_model) istället för TPS61097A-33, som inte hade tillräcklig marginal."
     ],
     "cells": 2,
     "chemistry": "Alkaline or NiMH",
@@ -45,11 +67,70 @@
       "boost_converter_input": "BAT_AA",
       "sense_line": "P0.ADC_BAT",
       "reverse_polarity": {
-        "booster_model": "TPS61097A-33",
+        "booster_model": "TPS61200",
         "tolerant": true,
-        "max_reverse_leakage_uA": 1,
-        "notes": "Boost-regulatorns interna MOSFET-struktur förhindrar backfeed från 3.3V till batteriet."
+        "notes": "Bytt från TPS61097A-33: 0.3-5.5V in, integrerad FET, ~1.2A (typ) switch current — ger verklig marginal mot 90 mA-målet vid 1.0V (se current_budget). Ändring gör att max_reverse_leakage_uA behöver verifieras på nytt mot TPS61200:s datablad (tidigare värde gällde TPS61097A-33)."
+      },
+      "output_current_verification": {
+        "date": "2026-09-15",
+        "source": "TI TPS61200 datasheet (SLVS577E), documented spec: 'average input current is limited to a maximum value of 1500 mA'",
+        "calculation": "Iout_max ≈ I_in_limit × (Vin/Vout) × efficiency = 1500mA × (1.0/3.3) × η",
+        "result_at_1_0V": "~225-275 mA (η=0.5-0.65, conservative for high step-up ratio at low Vin — well below the >90% the datasheet quotes for the much easier 3.3V/Vin≥2.4V case)",
+        "conclusion": "Comfortable ~2.5-3x margin over the 90 mA target at 1.0V. Based on a documented average-input-current spec, not just switch peak, so higher confidence than the earlier TPS61097A-33 estimate.",
+        "still_open": "Exact recommended inductor value from the datasheet's Inductor Selection section (11.2.2.3) could not be retrieved; boost_inductor candidates below remain provisional."
+      },
+      "boost_inductor": {
+        "value_uH": 2.2,
+        "candidates": ["Coilcraft XFL4020-222MEC (Isat ~3.7A)", "Würth 744042220 WE-PD2 (Isat ~2.9A)"],
+        "status": "unconfirmed — must have higher saturation current than the previous TPS61097A-33 candidates (Isat ~1.5A class), since TPS61200's ~1.2A switch limit drives higher peak inductor current. Needs verification against TPS61200 datasheet reference design before lock-in.",
+        "notes": "Denna induktor avgör om 90 mA vid 1.0V (se current_budget.target_ma_at_1_0V) faktiskt är uppnåeligt."
       }
+    }
+  },
+
+  "buck_converter": {
+    "part": "LMR33610",
+    "part_family": "LMR336x0 (LMR33610=1A, LMR33620=2A, LMR33630=3A; pin-compatible family)",
+    "design_comments": [
+      "36V max Vin ger god marginal mot VCC_MAIN:s 11-30V (inkl. transienter), till skillnad från delar spec'ade till exakt 28V.",
+      "1A-medlemmen (LMR33610) valdes eftersom kravet är minst 400 mA; 2A/3A-syskon finns om strömbudgeten senare kräver mer."
+    ],
+    "input": "VCC_MAIN (11-30V)",
+    "output": "VCC_3V3_FROM_MAIN",
+    "i_max_ma": {
+      "required_min": 400,
+      "variant_rated": 1000
+    }
+  },
+
+  "display": {
+    "type": "Waveshare 2.66 inch e-paper (G), 360x184 px, Red/Yellow/Black/White, SPI",
+    "design_comments": [
+      "Ansluts via egen dedikerad SPI-buss direkt till PAN1780, separat från modulkontaktens SPI1/SPI2.",
+      "Kabelkontakt är ännu ej bekräftad — tänkt som en kort-kabel-kontakt liknande Molex PicoBlade.",
+      "VIKTIGT (e-ink-specifikt): panelen måste sättas i sleep/stängas av (via PWR-pinnen) efter avslutad refresh. Att lämna panelen påslagen/aktiv för länge efter en uppdatering kan skada displayen. Detta måste hanteras i firmware innan produktion.",
+      "Länk till wiki: https://www.waveshare.com/wiki/2.66inch_e-Paper_Module_(G)_Manual#Overview"
+    ],
+    "interface": "dedicated SPI (baseboard-local, not on the module connector)",
+    "connector": {
+      "type": "TBD",
+      "candidates": ["Molex PicoBlade or similar short-cable board-to-board connector"],
+      "status": "unconfirmed"
+    },
+    "pinout": {
+      "VCC": "Power (3.3V / 5V input)",
+      "GND": "Ground",
+      "DIN": "SPI MOSI",
+      "CLK": "SPI SCK",
+      "CS": "SPI chip select, low active",
+      "DC": "Data/Command select (high=data, low=command)",
+      "RST": "External reset, low active",
+      "BUSY": "Busy status output",
+      "PWR": "Power on/off control — must be driven low (off) after each refresh completes to protect the panel"
+    },
+    "power": {
+      "voltage": "3.3V",
+      "source": "VCC_3V3"
     }
   },
 
@@ -63,33 +144,33 @@
       "PG är open-drain och blir high-Z vid VIN-loss → PR1 måste ha pull-down."
     ],
     "rails": {
-      "primary": "Buck_3V3",
-      "backup": "Boost_3V3"
+      "primary": "VCC_3V3_FROM_MAIN",
+      "backup": "VCC_3V3_FROM_BAT"
     },
 
     "priority": {
       "pin": "PR1",
       "connection": {
-        "buck_3v3_to_pr1": "10k resistor",
+        "vcc_3v3_from_main_to_pr1": "10k resistor",
         "buck_pg_to_pr1": "direct connection",
         "pr1_pull_down": "1M resistor to GND"
       },
       "logic": {
-        "high": "Buck selected (buck 3.3V drives PR1 high via 10k)",
-        "low": "Boost selected (PG low or pull-down active)"
+        "high": "VCC_3V3_FROM_MAIN selected (drives PR1 high via 10k)",
+        "low": "VCC_3V3_FROM_BAT selected (PG low or pull-down active)"
       }
     },
 
     "status": {
       "pin": "STAT",
-      "stat_high": "Buck active",
-      "stat_low": "Boost active"
+      "stat_high": "VCC_3V3_FROM_MAIN active",
+      "stat_low": "VCC_3V3_FROM_BAT active"
     },
 
     "behavior": {
-      "buck_active": "Buck PG high-Z + buck 3.3V via 10k pulls PR1 high",
+      "buck_active": "Buck PG high-Z + VCC_3V3_FROM_MAIN via 10k pulls PR1 high",
       "buck_inactive": "PG low or high-Z + PR1 1M pull-down forces PR1 low",
-      "brown_out": "PG actively pulls low → PR1 low → boost selected",
+      "brown_out": "PG actively pulls low → PR1 low → VCC_3V3_FROM_BAT selected",
       "seamless_switching": true,
       "battery_protection": true,
       "no_backfeed": true
@@ -142,16 +223,18 @@
         },
         "design_comments": [
           "RS485 ska ha twisted-pair routing och GND-referens nära terminalen.",
-          "Termination görs externt för flexibilitet."
+          "Termination görs externt för flexibilitet.",
+          "RS485 ska vara tillgängligt även när endast batteriet driver systemet."
         ]
       },
       "analog_0_10v": {
         "type": "5 mm pitch screw terminal",
         "pins": ["ANALOG_0_10V_OUT", "GND"],
-        "notes": "0–10 V analog output driven from op-amp powered by VCC_MAIN.",
+        "notes": "0–10 V analog output driven from op-amp powered by VCC_MAIN and VCC_3V3_FROM_MAIN.",
         "design_comments": [
           "0–10V-spåret ska vara separerat från digitala spår för att undvika brus.",
-          "Op-amp ska ha RC-filter för stabilitet."
+          "Op-amp ska ha RC-filter för stabilitet.",
+          "Drivs av VCC_MAIN (för 0-10V-svinget) och VCC_3V3_FROM_MAIN (som ren, mains-only referens — använder inte den batteri-påverkade VCC_3V3 så att utgången automatiskt är av när systemet körs enbart på batteri)."
         ]
       }
     },

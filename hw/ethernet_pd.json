@@ -1,4 +1,11 @@
 {
+  "vcc_pd_rail": {
+    "voltage": "12V",
+    "source": "poe_pd (Ag9912-MT)",
+    "diode_to_VCC_MAIN": true,
+    "description": "Locally generated 12V rail on the PD module; ORed onto VCC_MAIN via on-module Schottky diode (see poe_pd.power_path). Never exposed on the module connector, so it doesn't appear in interface.json."
+  },
+
   "poe_pd_module": {
     "description": "PoE power-in module: W6100 Ethernet MAC/PHY + PoE-PD front-end (Ag9912-MT). Uses only the standard module connector pins defined in interface.json.",
     "design_comments": [

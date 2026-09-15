@@ -4,8 +4,18 @@
     "design_comments": [
       "Endast en modultyp monterad åt gången.",
       "Ingen VCC_PD, ingen diod — modulen drivs enbart från VCC_MAIN.",
-      "W6100 på SPI1, PSE-chip på egen SPI2."
+      "W6100 på SPI1, PSE-chip på egen SPI2.",
+      "Stödjer endast PoE class 1 och 2; håller effektbehovet (upp till ~6.5W per port) rimligt för strömmen på VCC_MAIN."
     ],
+    "power": {
+      "vcc_main_requirement": "~24V",
+      "poe_class_support": ["class_1", "class_2"],
+      "onboard_booster": {
+        "output_voltage": "48V",
+        "purpose": "Genererar PoE-injektionsspänningen lokalt på modulen från VCC_MAIN (~24V); 48V finns aldrig på baskortet eller kontakten.",
+        "part": "TBD"
+      }
+    },
     "pse_chip": {
       "part": "TBD",
       "interface": "SPI2",
@@ -14,7 +24,7 @@
       "fault_signal": "AIO2"
     },
     "connector_usage": {
-      "VCC_MAIN": "sole power source (no VCC_PD, no diode)",
+      "VCC_MAIN": "sole power source (~24V required, no VCC_PD, no diode)",
       "VCC_3V3": "logic 3.3V in",
       "VCC_SWITCHED_3V3": "W6100 + PSE switched 3.3V",
       "SPI1_SCK_SPI1_MOSI_SPI1_MISO_SPI1_CS": "W6100",
@@ -26,3 +36,4 @@
     }
   }
 }
+
