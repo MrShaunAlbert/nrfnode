@@ -1,4 +1,10 @@
 {
+  "MCU-module": {
+    "part_number": "ENW-89854A1KF",
+    "description": "MCU module used on the baseboard",
+    "manufacturer": "Panasonic",
+    "mcu": "nRF52840"
+  },
   "current_budget": {
     "date": "2026-09-15",
     "status": "Best guess only — not verified against real datasheets/parts for several items, see per-row notes",
@@ -8,15 +14,15 @@
       "imu_iam20680hp_active": { "value": 3.4, "basis": "6-axis active mode, datasheet typ" },
       "nau7802_x3_active_no_excitation": { "value": 0.6, "basis": "~0.2 mA each, datasheet typ" },
       "load_cell_excitation_1ch_active": { "value": 9, "basis": "ASSUMED 350 ohm bridge @ 3.3V; no load cell part chosen yet, unconfirmed" },
-      "rs485_transceiver_active": { "value": 5, "basis": "ASSUMED; no specific transceiver part chosen yet, unconfirmed" },
+      "rs485_transceiver_active": { "value": 0.9, "basis": "TI SN65HVD3082E datasheet, max supply current 900 uA (verified 2026-09-15), see rs485_interface" },
       "display_refresh": { "value": 25, "basis": "ASSUMED typical e-paper driver current; not confirmed against this panel's datasheet" }
     },
-    "total_worst_case_ma": 48,
+    "total_worst_case_ma": 44,
     "target_ma_at_1_0V": 90,
     "available_ma_at_1_8V": 220,
     "available_ma_at_1_0V": "~225-275 mA with TPS61200 (verified 2026-09-15 against datasheet's documented 1500mA average input current limit, see battery_interface.electrical.output_current_verification) — comfortable ~2.5-3x margin over the 90 mA goal.",
-    "conclusion": "~48 mA worst-case load total is comfortably below the 90 mA goal, and the TPS61200 boost converter now has verified margin (~225-275 mA available at 1.0V) to deliver it.",
-    "open_items": ["RS485 transceiver part not chosen", "load cell part/bridge resistance not chosen", "display refresh current not datasheet-confirmed", "boost converter part may need to change to reliably hit 90 mA @ 1.0V with margin"]
+    "conclusion": "~44 mA worst-case load total is comfortably below the 90 mA goal, and the TPS61200 boost converter now has verified margin (~225-275 mA available at 1.0V) to deliver it.",
+    "open_items": ["load cell part/bridge resistance not chosen", "display refresh current not datasheet-confirmed", "boost inductor exact value not confirmed against TPS61200 datasheet design procedure"]
   },
 
   "battery_interface": {
@@ -134,6 +140,91 @@
     }
   },
 
+  "rs485_interface": {
+    "transceiver": {
+      "part": "TI SN65HVD3082E",
+      "design_comments": [
+        "3.3V-matad half-duplex RS-485-transceiver ur TI:s 'Low-Power'-familj; matchar VCC_3V3 direkt, ingen nivåomvandling behövs.",
+        "Max försörjningsström 900 µA (verifierat mot datablad 2026-09-15) — lågt nog för batteridrift.",
+        "1/8 unit load möjliggör upp till 256 noder på samma buss.",
+        "Inbyggt ESD-skydd är inte specat till något högt kV-värde för denna familj (till skillnad från pin-kompatibla THVD15xx-varianter, som dock kräver 5V-matning och därför inte passar vår 3.3V-design) — extern TVS krävs, se bus_protection."
+      ],
+      "power": {
+        "voltage": "3.3V",
+        "source": "VCC_3V3",
+        "i_max_ua": 900
+      },
+      "direction_control": {
+        "signals": ["DE", "RE_n"],
+        "control": "Tied together, driven by one dedicated PAN1780 GPIO (baseboard-local, not via modulkontakten)",
+        "notes": "Alternativ för framtiden: byt till autodirection-transceiver (t.ex. MAX13487E) för att spara en GPIO om det blir trångt."
+      },
+      "uart": {
+        "signals": {"DI": "from PAN1780 UART2 TX", "RO": "to PAN1780 UART2 RX"},
+        "notes": "Dedikerad UART-instans (UART2) på PAN1780, separat från BLE-stacken och separat från debug-UART (UART1/MCU_TX1/MCU_RX1 på debug_connector). OBS: debug_connector pin 5/9 (märkta MCU_RX2/MCU_TX2) är INTE dessa råa logiknivh-UART-signaler — de är kopplade till RS485_A/RS485_B (efter transceivern), se debug_connector.design_comments."
+      }
+    },
+    "bus_protection": {
+      "tvs": {
+        "part": "Littelfuse SM712",
+        "specs": {
+          "standoff_voltage_V": { "low": -7.0, "high": 12.0, "note": "Asymmetric, deliberately matches SN65HVD3082E's -7V to +12V common-mode range" },
+          "breakdown_voltage_V": { "low": 7.5, "high": 13.3 },
+          "esd_rating": "±30kV IEC 61000-4-2 (contact and air discharge)",
+          "eft_rating": "50A, IEC 61000-4-4",
+          "surge_rating": "19A (8/20us), IEC 61000-4-5 2nd edition",
+          "peak_pulse_power_W": 600,
+          "package": "SOT-23-6",
+          "channels": 2
+        },
+        "design_comments": [
+          "SM712 är branschstandard specifikt avsedd för RS-485-applikationer med asymmetrisk arbetsspänning (-7V till 12V) — matchar SN65HVD3082E:s common-mode-område exakt, enligt tillverkarens egen beskrivning.",
+          "Verifierat mot datablad 2026-09-15 (hw/datasheets/Littelfuse-TVS-Diode-Array-SM712-Datasheet.pdf): ±30kV ESD (kontakt och luft), 600W peak pulse power, 19A lightning surge (8/20us) — bättre skydd än tidigare uppskattat (15kV)."
+        ],
+        "placement": "Over A/B, så nära skruvplinten som möjligt",
+        "purpose": "ESD/överspänningsskydd för fältdragen RS-485-buss, kompenserar transceiverns låga inbyggda ESD-nivå"
+      },
+      "series_resistors": {
+        "value_ohm": 100,
+        "purpose": "Extra strömbegränsning/skydd i serie med A/B, valfritt beroende på TVS-val"
+      }
+    },
+    "bias_resistors": {
+      "pull_up_A_to_VCC_ohm": 560,
+      "pull_down_B_to_GND_ohm": 560,
+      "notes": "Säkerställer definierad vilonivå (fail-safe) när ingen enhet driver bussen. Kombineras med extern 120Ω-terminering (se external_interfaces.screw_terminals.rs485)."
+    },
+    "isolation": {
+      "galvanic_isolation": false,
+      "notes": "Ej isolerad i nuvarande design. Kan läggas till senare (digital isolator + isolerad DC/DC) om fältmiljön kräver det."
+    }
+  },
+
+  "debug_connector": {
+    "type": "Tag-Connect footprint (no mounted connector — gold-plated pads only, debug cable clips on via pogo pins)",
+    "footprint_part": "TC2050-IDC-NL (unshrouded, no-legs, 10-pin, 0.05in/1.27mm pitch)",
+    "schematic_designator": "CON102 (IDC10 in the schematic image — this is just the reference designator, not a physical connector part)",
+    "design_comments": [
+      "Standard SWD-uppsättning (Vtref, SWDIO, GND, SWCLK, SWO, nRESET) plus ett debug-UART-par och RS485-bussen utbrutna för åtkomst på bänk.",
+      "MCU_TX1/MCU_RX1 (pin 7/8) är debug-UART-konsolen (rå logiknivå-UART, separat från RS485).",
+      "Pin 5 och 9 (märkta MCU_RX2/MCU_TX2 i schemat, men funktionellt RS485_A/RS485_B) är kopplade till den differentiella RS485-bussen EFTER transceivern (SN65HVD3082E), inte till PAN1780:s råa UART2-signaler. Detta gör det möjligt att ansluta en USB-RS485-FTDI-adapter direkt på debug_connector för bänktest, utan att koppla loss skruvplinten.",
+      "Ingen komponent monteras på baskortet för denna anslutning — endast Tag-Connect-pads (TC2050-IDC-NL-mönster) för debuggerns pogo-pin-kabel."
+    ],
+    "pinout": {
+      "1": "Vtref",
+      "2": "SWDIO",
+      "3": "GND",
+      "4": "SWCLK",
+      "5": "MCU_RX2 (schemat-etikett) = RS485_B",
+      "6": "SWO",
+      "7": "MCU_TX1",
+      "8": "MCU_RX1",
+      "9": "MCU_TX2 (schemat-etikett) = RS485_A",
+      "10": "nRESET"
+    },
+    "open_items": ["A/B-tilldelningen till pin 5/9 ovan är preliminär (godtycklig placeholder) — inte kritiskt, polariteten kan bytas på debugger-/FTDI-adapter-sidan om den inte stämmer."]
+  },
+
   "power_mux": {
     "type": "TPS2120",
     "design_comments": [
@@ -224,7 +315,8 @@
         "design_comments": [
           "RS485 ska ha twisted-pair routing och GND-referens nära terminalen.",
           "Termination görs externt för flexibilitet.",
-          "RS485 ska vara tillgängligt även när endast batteriet driver systemet."
+          "RS485 ska vara tillgängligt även när endast batteriet driver systemet.",
+          "Se rs485_interface för transceiver, riktningsstyrning, bias och skyddskomponenter."
         ]
       },
       "analog_0_10v": {
