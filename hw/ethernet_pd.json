@@ -1,0 +1,92 @@
+{
+  "poe_pd_module": {
+    "description": "PoE power-in module: W6100 Ethernet MAC/PHY + PoE-PD front-end (Ag9912-MT). Uses only the standard module connector pins defined in interface.json.",
+    "design_comments": [
+      "Endast en modultyp monterad åt gången (se hw/sensors.json sensor_module.design_comments för exklusivitetsregel).",
+      "W6100 bör placeras nära magnetics för att minimera differential-längd.",
+      "VCC_PD genereras och ORas mot VCC_MAIN lokalt på modulen, inte via kontakten (se poe_pd.power_path)."
+    ],
+    "connector_usage": {
+      "VCC_MAIN": "primary power in",
+      "VCC_3V3": "logic 3.3V in",
+      "VCC_SWITCHED_3V3": "W6100 switched 3.3V",
+      "SPI1_SCK_SPI1_MOSI_SPI1_MISO_SPI1_CS": "W6100 (SPI1, own CS)",
+      "SPI2_*": "unused (reserved/GPIO)",
+      "AIO1": "W6100_INT",
+      "AIO2": "POE_PRESENT (Ag9912-MT status) / VCC_PD monitor",
+      "EN_RESET": "W6100 reset",
+      "I2C_SCL_I2C_SDA": "not used"
+    }
+  },
+
+  "poe_magnetics": {
+    "type": "Würth 7490120110",
+    "design_comments": [
+      "Placera magnetics <10 mm från RJ45 för att minimera EMI.",
+      "Center taps ska routas kort och brett till Ag9912-MT.",
+      "Undvik koppar under magnetics för att minska kapacitiv koppling."
+    ],
+    "connections": {
+      "center_tap_1": "VIN+ (Ag9912-MT)",
+      "center_tap_2": "VIN- (Ag9912-MT)",
+      "rj45_interface": "TX/RX pairs routed to RJ45 jack",
+      "notes": [
+        "Center taps ger PoE power feed direkt till PD-modulen.",
+        "Ingen extern likriktare behövs eftersom Ag9912-MT har intern PD-front-end."
+      ]
+    },
+    "electrical": {
+      "isolation": "1500 Vrms",
+      "speed": "10/100BASE-T",
+      "mounting": "SMD",
+      "package": "Compact PoE transformer module"
+    }
+  },
+
+  "poe_pd": {
+    "type": "Silvertel Ag9912-MT",
+    "design_comments": [
+      "Ag9912-MT ger isolerad 12V och är extremt enkel att layouta.",
+      "Placera LC-filter och TVS nära modulen för att undvika ringning.",
+      "GND_ISO kopplas till system-GND via bred koppling och stitching-vias."
+    ],
+    "input": {
+      "pins": ["VIN+", "VIN-"],
+      "source": "RJ45 PoE center taps via magnetics",
+      "notes": "Modulen innehåller full PD-klassning och likriktning."
+    },
+    "output": {
+      "voltage": "12 V",
+      "pins": ["VOUT", "GND_ISO"],
+      "system_ground_connection": true,
+      "connect_to": "VCC_MAIN (via on-module Schottky diode; not exposed on connector)"
+    },
+    "power_path": {
+      "vcc_main_oring": "PoE 12 V ORed with VCC_MAIN via on-module diode, not via the connector",
+      "diode_type": "Schottky or ideal diode controller",
+      "direction": "Bidirectional allowed"
+    }
+  },
+
+  "poe_pd_filtering": {
+    "design_comments": [
+      "10uF + 100nF ger låg ESR och dämpar HF-ripple från Ag9912-MT.",
+      "4.7uH induktor minskar common-mode brus innan VCC_MAIN.",
+      "SMBJ13A skyddar mot PoE-transienter som kan nå 60–80V.",
+      "Ferrit-bead är valfri men rekommenderas för att minska EMI."
+    ],
+    "output_filter": {
+      "capacitor_bulk": "10 uF, 25 V, X5R, 1206 (Murata GRM31CR61E106KA12L)",
+      "capacitor_hf": "100 nF, 50 V, X7R, 0603 (Murata GRM188R71H104KA93)",
+      "inductor": "4.7 uH, 1.7 A (Würth 744373460047)"
+    },
+    "tvs": {
+      "type": "SMBJ13A",
+      "location": "After LC filter, before VCC_MAIN_OUT"
+    },
+    "ferrit_bead": {
+      "recommended": true,
+      "type": "Murata BLM31PG600SN1L"
+    }
+  }
+}

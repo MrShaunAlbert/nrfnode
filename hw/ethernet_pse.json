@@ -1,0 +1,28 @@
+{
+  "poe_pse_module": {
+    "description": "PoE power-out module: W6100 Ethernet MAC/PHY + PSE controller. Uses only the standard module connector pins defined in interface.json.",
+    "design_comments": [
+      "Endast en modultyp monterad åt gången.",
+      "Ingen VCC_PD, ingen diod — modulen drivs enbart från VCC_MAIN.",
+      "W6100 på SPI1, PSE-chip på egen SPI2."
+    ],
+    "pse_chip": {
+      "part": "TBD",
+      "interface": "SPI2",
+      "cs_pin": "SPI2_CS",
+      "enable_signal": "EN_RESET",
+      "fault_signal": "AIO2"
+    },
+    "connector_usage": {
+      "VCC_MAIN": "sole power source (no VCC_PD, no diode)",
+      "VCC_3V3": "logic 3.3V in",
+      "VCC_SWITCHED_3V3": "W6100 + PSE switched 3.3V",
+      "SPI1_SCK_SPI1_MOSI_SPI1_MISO_SPI1_CS": "W6100",
+      "SPI2_SCK_SPI2_MOSI_SPI2_MISO_SPI2_CS": "PSE chip",
+      "AIO1": "W6100_INT",
+      "AIO2": "PSE_FAULT",
+      "EN_RESET": "W6100 reset + PSE_EN",
+      "I2C_SCL_I2C_SDA": "not used"
+    }
+  }
+}

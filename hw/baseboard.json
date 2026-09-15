@@ -1,0 +1,169 @@
+{
+  "battery_interface": {
+    "type": "2xAA rear-mounted PCB contacts",
+    "design_comments": [
+      "Batteriet kan ensamt driva baseboard och enklare moduler så som sensormoduler, men är endast backup och ska aldrig belastas när VCC_MAIN finns.",
+      "PCB-kontakter minimerar mekanik och ger låg profil.",
+      "Keepout-zoner behövs för att undvika mekanisk nötning mot koppar."
+    ],
+    "cells": 2,
+    "chemistry": "Alkaline or NiMH",
+    "voltage_range": "1.0–3.3 V",
+    "mounting": {
+      "location": "Back side of base board",
+      "orientation": "Horizontal, side-by-side",
+      "contact_type": "PCB spring/leaf contacts (4 pcs)",
+      "contact_spacing": {
+        "cell_length_mm": 50.5,
+        "contact_to_contact_mm": 52,
+        "cell_diameter_mm": 14.5
+      },
+      "keepout_zones": {
+        "mechanical": {
+          "description": "No components or tall parts allowed near battery pressure zones.",
+          "clearance_mm": 3
+        },
+        "copper": {
+          "description": "Copper keep-out under and around battery shells to avoid abrasion.",
+          "clearance_mm": 2
+        },
+        "soldermask": {
+          "description": "Optional soldermask keep-out for improved mechanical durability.",
+          "enabled": false
+        }
+      }
+    },
+    "contacts": {
+      "positive_cell1": { "name": "BAT_AA_POS1", "type": "PCB leaf" },
+      "negative_cell1": { "name": "BAT_AA_NEG1", "type": "PCB leaf" },
+      "positive_cell2": { "name": "BAT_AA_POS2", "type": "PCB leaf" },
+      "negative_cell2": { "name": "BAT_AA_NEG2", "type": "PCB leaf" }
+    },
+    "electrical": {
+      "series_connection": true,
+      "output": "BAT_AA",
+      "boost_converter_input": "BAT_AA",
+      "sense_line": "P0.ADC_BAT",
+      "reverse_polarity": {
+        "booster_model": "TPS61097A-33",
+        "tolerant": true,
+        "max_reverse_leakage_uA": 1,
+        "notes": "Boost-regulatorns interna MOSFET-struktur förhindrar backfeed från 3.3V till batteriet."
+      }
+    }
+  },
+
+  "power_mux": {
+    "type": "TPS2120",
+    "design_comments": [
+      "TPS2120 är vald för att den har stabil prioritet och låg Rds(on).",
+      "Buck ska alltid vara primär källa när VCC_MAIN finns.",
+      "Boost ska endast användas när buck saknar VIN eller PG är LOW.",
+      "PR1-kopplingen är kritisk för batteriskydd.",
+      "PG är open-drain och blir high-Z vid VIN-loss → PR1 måste ha pull-down."
+    ],
+    "rails": {
+      "primary": "Buck_3V3",
+      "backup": "Boost_3V3"
+    },
+
+    "priority": {
+      "pin": "PR1",
+      "connection": {
+        "buck_3v3_to_pr1": "10k resistor",
+        "buck_pg_to_pr1": "direct connection",
+        "pr1_pull_down": "1M resistor to GND"
+      },
+      "logic": {
+        "high": "Buck selected (buck 3.3V drives PR1 high via 10k)",
+        "low": "Boost selected (PG low or pull-down active)"
+      }
+    },
+
+    "status": {
+      "pin": "STAT",
+      "stat_high": "Buck active",
+      "stat_low": "Boost active"
+    },
+
+    "behavior": {
+      "buck_active": "Buck PG high-Z + buck 3.3V via 10k pulls PR1 high",
+      "buck_inactive": "PG low or high-Z + PR1 1M pull-down forces PR1 low",
+      "brown_out": "PG actively pulls low → PR1 low → boost selected",
+      "seamless_switching": true,
+      "battery_protection": true,
+      "no_backfeed": true
+    },
+
+    "capacitors": {
+      "in1": "10 uF X5R 0805",
+      "in2": "10 uF X5R 0805",
+      "out": "22 uF X5R 0805"
+    }
+  },
+
+  "external_interfaces": {
+    "usb_c": {
+      "enabled": true,
+      "design_comments": [
+        "USB-C används endast som device (UFP).",
+        "VBUS ska aldrig backfeeda från VCC_MAIN.",
+        "En diod räcker för att isolera PC-VBUS från systemets VCC_MAIN."
+      ],
+      "port": {
+        "name": "USB-C Debug/Data",
+        "mode": "USB device (UFP)",
+        "signals": ["USB_DP", "USB_DM", "USB_VBUS"],
+        "power": {
+          "vbussource": "PC only",
+          "vcc_main_path": "USB_VBUS -> diode -> VCC_MAIN",
+          "backfeed_protection": true,
+          "pc_power_detection_needed": false
+        }
+      }
+    },
+
+    "screw_terminals": {
+      "vcc_main": {
+        "type": "5 mm pitch screw terminal",
+        "pins": ["VCC_MAIN", "GND"],
+        "design_comments": [
+          "Terminalen ska ha breda spår för att hantera 30V och upp till 1A.",
+          "Placera nära modulkontakten för kort power-path."
+        ]
+      },
+      "rs485": {
+        "type": "5 mm pitch screw terminal",
+        "pins": ["RS485_A", "RS485_B", "GND"],
+        "termination": {
+          "onboard": false,
+          "method": "External termination resistor placed in the screw terminal if needed",
+          "recommended_value_ohm": 120
+        },
+        "design_comments": [
+          "RS485 ska ha twisted-pair routing och GND-referens nära terminalen.",
+          "Termination görs externt för flexibilitet."
+        ]
+      },
+      "analog_0_10v": {
+        "type": "5 mm pitch screw terminal",
+        "pins": ["ANALOG_0_10V_OUT", "GND"],
+        "notes": "0–10 V analog output driven from op-amp powered by VCC_MAIN.",
+        "design_comments": [
+          "0–10V-spåret ska vara separerat från digitala spår för att undvika brus.",
+          "Op-amp ska ha RC-filter för stabilitet."
+        ]
+      }
+    },
+
+    "i2c_expansion": {
+      "footprint": "JST-PH-4 or 2.54 mm header",
+      "bestuffed": false,
+      "signals": ["I2C_SCL", "I2C_SDA", "3V3", "GND"],
+      "design_comments": [
+        "I2C-expansion är valfri och ska ha ESD-skydd om bestyckad.",
+        "Placera nära kortkanten för enkel åtkomst."
+      ]
+    }
+  }
+}

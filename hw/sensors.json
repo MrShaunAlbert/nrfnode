@@ -1,0 +1,76 @@
+{
+  "sensor_module": {
+    "description": "Pluggable sensor module: IMU plus 3x load-cell/temperature acquisition channels.",
+    "design_comments": [
+      "IMU flyttad hit från baskortet för att hålla baskortet modul-agnostiskt.",
+      "3x NAU7802 ger en dedikerad kanal per lastcell + temperaturgivare, separerade via I2C-mux.",
+      "Ett tänkt användningsområde är att kunna mäta vikt och temperatur på gasolflaska i husvagn och samtidigt hjälpa till med nivellering av husvagn vid parkering."
+    ],
+    "power": {
+      "primary": "VCC_3V3",
+      "switched": "VCC_SWITCHED_3V3",
+      "notes": "Modulen genererar ingen egen 3.3V; switched rail används vid behov av brygg-excitation eller mux-styrning."
+    },
+    "imu": {
+      "type": "TDK IAM-20680HP",
+      "design_comments": [
+        "Egen SPI-buss (SPI1) för deterministisk timing, oberoende av I2C-sensorerna.",
+        "IMU_INT routas till AIO1 för minsta möjliga latens."
+      ],
+      "interface": "SPI1",
+      "signals": {
+        "spi_sck": "SPI1_SCK",
+        "spi_mosi": "SPI1_MOSI",
+        "spi_miso": "SPI1_MISO",
+        "imu_cs": "SPI1_CS",
+        "imu_int": "AIO1",
+        "imu_rst": "EN_RESET"
+      }
+    },
+    "load_cell_channels": {
+      "count": 3,
+      "design_comments": [
+        "Varje kanal har en dedikerad NAU7802 med två differentialingångar: kanal 1 lastcell, kanal 2 NTC/PTC100.",
+        "Alla tre NAU7802 delar samma I2C-adress (0x2A) och separeras via I2C-mux.",
+        "DRDY-linjerna kopplas till de oförbrukade SPI2-pinnarna (som GPIO) för att få riktiga per-kanal-interrupt när data är redo."
+      ],
+      "adc": {
+        "part": "NAU7802",
+        "count": 3,
+        "i2c_address": "0x2A",
+        "interface": "I2C (via i2c_mux)",
+        "channels_per_device": {
+          "channel_1": "load_cell (4-wire bridge)",
+          "channel_2": "NTC_or_PTC100 (bridge/divider)"
+        },
+        "drdy": {
+          "description": "Varje NAU7802 har en dedikerad ADC_DRDY-utgång. Alla tre routas till egna GPIO-pinnar via SPI2 (oförbrukad buss i sensor_module) för direkt interrupt-on-pin.",
+          "connections": {
+            "nau7802_ch1_drdy": "SPI2_SCK",
+            "nau7802_ch2_drdy": "SPI2_MOSI",
+            "nau7802_ch3_drdy": "SPI2_MISO"
+          }
+        }
+      },
+      "i2c_mux": {
+        "part": "TCA9548A",
+        "note": "Föreslaget val, ej slutgiltigt bekräftat.",
+        "channels_used": 3,
+        "interface": "I2C",
+        "purpose": "Separerar de tre NAU7802 (samma I2C-adress 0x2A) på varsin mux-kanal.",
+        "signals": { "scl": "I2C_SCL", "sda": "I2C_SDA" }
+      }
+    },
+    "connector_usage": {
+      "VCC_3V3": "module power",
+      "VCC_SWITCHED_3V3": "optional switched power (excitation/mux)",
+      "SPI1_SCK_SPI1_MOSI_SPI1_MISO_SPI1_CS": "IMU",
+      "SPI2_SCK_SPI2_MOSI_SPI2_MISO": "NAU7802 x3 ADC_DRDY (repurposed as GPIO interrupt-on-pin)",
+      "SPI2_CS": "unused (reserved/GPIO)",
+      "I2C_SCL_I2C_SDA": "NAU7802 x3 (via mux)",
+      "AIO1": "IMU_INT",
+      "AIO2": "unused",
+      "EN_RESET": "IMU reset"
+    }
+  }
+}
