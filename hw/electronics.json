@@ -61,23 +61,23 @@
       "3x NAU7802 ger en dedikerad kanal per lastcell + temperaturgivare, separerade via I2C-mux."
     ],
     "power": {
-      "primary": "3V3_MOD_IN",
+      "primary": "VCC_3V3",
       "switched": "VCC_SWITCHED_3V3",
       "notes": "Modulen genererar ingen egen 3.3V; switched rail används vid behov av brygg-excitation eller mux/expander-styrning."
     },
     "imu": {
       "type": "TDK IAM-20680HP",
       "design_comments": [
-        "SPI delas med baskortets master; IMU har egen CS via SPI_CS för deterministisk timing.",
-        "IMU_INT routas till INT1 för minsta möjliga latens."
+        "Egen SPI-buss (SPI1) för deterministisk timing, oberoende av I2C-sensorerna.",
+        "IMU_INT routas till AIO1 för minsta möjliga latens."
       ],
-      "interface": "SPI",
+      "interface": "SPI1",
       "signals": {
-        "spi_sck": "SPI_SCK",
-        "spi_mosi": "SPI_MOSI",
-        "spi_miso": "SPI_MISO",
-        "imu_cs": "SPI_CS",
-        "imu_int": "INT1",
+        "spi_sck": "SPI1_SCK",
+        "spi_mosi": "SPI1_MOSI",
+        "spi_miso": "SPI1_MISO",
+        "imu_cs": "SPI1_CS",
+        "imu_int": "AIO1",
         "imu_rst": "EN_RESET"
       }
     },
@@ -107,27 +107,26 @@
     },
     "gpio_expander": {
       "part": "TBD",
-      "notes": "Extra GPIO för framtida bruk; exponeras via GPIO_GEN1/GPIO_GEN2.",
+      "notes": "Extra GPIO för framtida bruk; exponeras via SPI2 (repurposed as GPIO) eller AIO2.",
       "interface": "I2C",
       "signals": {
         "scl": "I2C_SCL",
         "sda": "I2C_SDA",
-        "gpio_out": ["GPIO_GEN1", "GPIO_GEN2"]
+        "gpio_out": ["AIO2"]
       }
     },
     "status": {
-      "nau_drdy": "INT2_STATUS"
+      "nau_drdy": "AIO2"
     },
     "connector_usage": {
-      "3V3_MOD_IN": "module power",
+      "VCC_3V3": "module power",
       "VCC_SWITCHED_3V3": "optional switched power (excitation/mux/expander)",
-      "SPI_SCK_SPI_MOSI_SPI_MISO_SPI_CS": "IMU",
+      "SPI1_SCK_SPI1_MOSI_SPI1_MISO_SPI1_CS": "IMU",
+      "SPI2_*": "unused (reserved/GPIO)",
       "I2C_SCL_I2C_SDA": "NAU7802 x3 (via mux) + GPIO expander",
-      "INT1": "IMU_INT",
-      "INT2_STATUS": "NAU_DRDY",
-      "EN_RESET": "IMU reset",
-      "ADC_MOD1_ADC_MOD2": "unused (reserved)",
-      "GPIO_GEN1_GPIO_GEN2": "GPIO expander outputs"
+      "AIO1": "IMU_INT",
+      "AIO2": "NAU_DRDY / GPIO expander spare",
+      "EN_RESET": "IMU reset"
     }
   },
 
@@ -260,17 +259,14 @@
     ],
     "connector_usage": {
       "VCC_MAIN": "primary power in",
-      "3V3_MOD_IN": "logic 3.3V in",
+      "VCC_3V3": "logic 3.3V in",
       "VCC_SWITCHED_3V3": "W6100 switched 3.3V",
-      "SPI_SCK_SPI_MOSI_SPI_MISO": "shared SPI bus (W6100)",
-      "SPI_CS": "W6100 chip select",
-      "INT1": "W6100_INT",
-      "INT2_STATUS": "POE_PRESENT (Ag9912-MT status)",
+      "SPI1_SCK_SPI1_MOSI_SPI1_MISO_SPI1_CS": "W6100 (SPI1, own CS)",
+      "SPI2_*": "unused (reserved/GPIO)",
+      "AIO1": "W6100_INT",
+      "AIO2": "POE_PRESENT (Ag9912-MT status) / VCC_PD monitor",
       "EN_RESET": "W6100 reset",
-      "ADC_MOD1": "VCC_PD monitor",
-      "ADC_MOD2": "spare",
-      "I2C_SCL_I2C_SDA": "not used",
-      "GPIO_GEN1_GPIO_GEN2": "not used"
+      "I2C_SCL_I2C_SDA": "not used"
     }
   },
 
@@ -279,27 +275,24 @@
     "design_comments": [
       "Endast en modultyp monterad åt gången.",
       "Ingen VCC_PD, ingen diod — modulen drivs enbart från VCC_MAIN.",
-      "Delar SPI-bus med W6100; PSE-chip har egen CS på GPIO_GEN1."
+      "W6100 på SPI1, PSE-chip på egen SPI2 (ingen delad CS behövs längre)."
     ],
     "pse_chip": {
       "part": "TBD",
-      "interface": "SPI",
-      "cs_pin": "GPIO_GEN1",
+      "interface": "SPI2",
+      "cs_pin": "SPI2_CS",
       "enable_signal": "EN_RESET",
-      "fault_signal": "GPIO_GEN2"
+      "fault_signal": "AIO2"
     },
     "connector_usage": {
       "VCC_MAIN": "sole power source (no VCC_PD, no diode)",
-      "3V3_MOD_IN": "logic 3.3V in",
+      "VCC_3V3": "logic 3.3V in",
       "VCC_SWITCHED_3V3": "W6100 + PSE switched 3.3V",
-      "SPI_SCK_SPI_MOSI_SPI_MISO": "shared SPI bus (W6100 + PSE)",
-      "SPI_CS": "W6100 chip select",
-      "GPIO_GEN1": "PSE chip select",
-      "INT1": "W6100_INT",
-      "GPIO_GEN2": "PSE_FAULT",
+      "SPI1_SCK_SPI1_MOSI_SPI1_MISO_SPI1_CS": "W6100",
+      "SPI2_SCK_SPI2_MOSI_SPI2_MISO_SPI2_CS": "PSE chip",
+      "AIO1": "W6100_INT",
+      "AIO2": "PSE_FAULT",
       "EN_RESET": "W6100 reset + PSE_EN",
-      "ADC_MOD1": "PSE VOUT monitor",
-      "ADC_MOD2": "spare",
       "I2C_SCL_I2C_SDA": "not used"
     }
   },
